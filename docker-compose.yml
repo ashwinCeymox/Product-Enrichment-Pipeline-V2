@@ -88,6 +88,20 @@ services:
     depends_on:
       - api
 
+  steel-api:
+    image: ghcr.io/steel-dev/steel-browser-api:latest
+    ports:
+      - "3000:3000"
+      - "9223:9223"
+    restart: unless-stopped
+
+  steel-ui:
+    image: ghcr.io/steel-dev/steel-browser-ui:latest
+    ports:
+      - "5173:5173"
+    depends_on:
+      - steel-api
+
 volumes:
   pg_data:
   redis_data:

@@ -152,7 +152,8 @@ export default function TaskLogs() {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'success': 
-      case 'waiting_for_approval': return <CheckCircle2 size={16} className="text-emerald-500" />;
+      case 'waiting_for_approval': 
+      case 'image_generation_complete': return <CheckCircle2 size={16} className="text-emerald-500" />;
       case 'failed':
       case 'aborted':
       case 'error': return <XCircle size={16} className="text-rose-500" />;
@@ -280,7 +281,7 @@ export default function TaskLogs() {
                         >
                           <div className="flex justify-between items-start mb-2">
                             <h4 className="font-bold text-slate-800 text-lg truncate pr-4">
-                              {job.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} 
+                              {job.product_data?.product_identity?.product_name || job.product_data?.product_identity?.brand || job.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} 
                               {/* Simple domain extraction as a fallback task name if job has no explicit name */}
                             </h4>
                             <div className="flex items-center gap-3 shrink-0">
@@ -317,12 +318,14 @@ export default function TaskLogs() {
                                       >
                                         <FileText size={14} /> CONTENT PREVIEW
                                       </button>
-                                      <button 
-                                        onClick={() => navigate(`/task-logs/ai-images/${job.job_id}?taskName=${encodeURIComponent(task.task_name)}`)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-xs font-bold hover:bg-indigo-100 transition-colors"
-                                      >
-                                        <ImageIcon size={14} /> IMAGE REVIEW
-                                      </button>
+                                      {['image_generation', 'image_generation_stopped', 'image_generation_complete', 'image_generation_failed'].includes(job.status) && (
+                                        <button 
+                                          onClick={() => navigate(`/task-logs/ai-images/${job.job_id}?taskName=${encodeURIComponent(task.task_name)}`)}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-xs font-bold hover:bg-indigo-100 transition-colors"
+                                        >
+                                          <ImageIcon size={14} /> IMAGE REVIEW
+                                        </button>
+                                      )}
                                     </>
                                   ) : (
                                     <button 

@@ -184,6 +184,24 @@ def create_job(
             }
         )
     # ── End Deepseek Credit Check ────────────────────────────────
+
+    # ── OpenRouter Credit Check ──────────────────────────────────
+    if payload.generate_ai_images:
+        # Assume roughly 4 images per URL
+        or_check = credit_service.check_initial_approval(len(valid_urls) * 4)
+        if or_check["status"] == "block":
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "provider": "openrouter",
+                    "message": or_check.get("reason", "Insufficient OpenRouter credits for image generation"),
+                    "balance": or_check.get("balance"),
+                    "job_cost": or_check.get("job_cost"),
+                    "block_threshold": or_check.get("threshold"),
+                }
+            )
+    # ── End OpenRouter Credit Check ──────────────────────────────
     
     batch_id, jobs = _build_jobs(
         db,
@@ -278,6 +296,24 @@ async def upload_csv(
             }
         )
     # ── End Deepseek Credit Check ────────────────────────────────
+
+    # ── OpenRouter Credit Check ──────────────────────────────────
+    if generate_ai_images:
+        # Assume roughly 4 images per URL
+        or_check = credit_service.check_initial_approval(len(valid_urls) * 4)
+        if or_check["status"] == "block":
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "provider": "openrouter",
+                    "message": or_check.get("reason", "Insufficient OpenRouter credits for image generation"),
+                    "balance": or_check.get("balance"),
+                    "job_cost": or_check.get("job_cost"),
+                    "block_threshold": or_check.get("threshold"),
+                }
+            )
+    # ── End OpenRouter Credit Check ──────────────────────────────
 
     batch_id, jobs = _build_jobs(
         db,

@@ -10,7 +10,7 @@ from app.tasks.tools.img_prompt import generate_all_prompts
 from app.tasks.tools.image_generator import generate_product_images
 
 REFERENCE_IMAGE_CACHE = "output/reference_cache"
-MAX_SCRAPED_IMAGES = int(os.getenv("MAX_SCRAPED_IMAGES", "6"))
+MAX_SCRAPED_IMAGES = int(os.getenv("MAX_SCRAPED_IMAGES", "5"))
 
 async def download_reference_images(product: dict, job_id: str, max_images: int = MAX_SCRAPED_IMAGES) -> list[str]:
     paths = []

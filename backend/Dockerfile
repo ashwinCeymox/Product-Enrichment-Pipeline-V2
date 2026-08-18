@@ -2,11 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
+# --- Node.js (for running the Steel MCP server as a subprocess) ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev curl git \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# --- Clone + build steel-mcp-server (no npm package exists, must build from source) ---
+RUN git clone --depth 1 https://github.com/steel-dev/steel-mcp-server.git /opt/steel-mcp-server \
+    && cd /opt/steel-mcp-server \
+    && npm install \
+    && npm run build
 
 # Install Python dependencies
 COPY requirements.txt .

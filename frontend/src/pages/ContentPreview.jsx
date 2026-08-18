@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Save, Check, Search, Maximize, ExternalLink, Globe, FileText, Image as ImageIcon, Sparkles, Loader2, PlayCircle, StopCircle, RefreshCcw, ChevronLeft, ChevronRight, Heart, Share2, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
@@ -21,6 +22,17 @@ export default function ContentPreview() {
   const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem('contentPreview_sidebarOpen') !== 'false'; } catch { return true; }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem('contentPreview_sidebarOpen', String(next)); } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (taskName) {
@@ -298,6 +310,25 @@ export default function ContentPreview() {
     }
   };
 
+  const handleGenerateAiImages = async () => {
+    setSaving(true);
+    try {
+      // Ensure the JSON is saved/approved before deepseek starts writing prompts
+      await api.post(`/jobs/${jobId}/approve`, { product_data: JSON.parse(jsonData) });
+      
+      // Kick off the generation
+      await api.post(`/images/job/${jobId}/resume`);
+      
+      // Navigate to the Image Review tab to wait for the Shimmer effect to finish
+      navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}`);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to start AI image generation.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRemoveBundle = async () => {
     if (!window.confirm("Are you sure you want to remove this bundle?")) return;
     setSaving(true);
@@ -326,7 +357,12 @@ export default function ContentPreview() {
   return (
     <div className="h-full w-full bg-slate-50 flex flex-col md:flex-row text-sm overflow-hidden z-0">
       {/* Sidebar */}
-      <div className="w-full md:w-64 flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col shadow-sm z-20">
+      <div
+        className={clsx(
+          "flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col shadow-sm z-20 transition-all duration-200 ease-in-out",
+          sidebarOpen ? "w-full md:w-64" : "w-0 md:w-0 overflow-hidden border-r-0"
+        )}
+      >
         <div className="p-3 border-b border-slate-200">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -392,14 +428,6 @@ export default function ContentPreview() {
             </div>
             <div className="flex flex-col gap-2">
               <button
-                onClick={handleSaveChanges}
-                disabled={saving}
-                className="w-full py-2 px-3 bg-white border border-slate-300 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-50 transition-colors flex justify-center items-center gap-2"
-              >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                SAVE CHANGES
-              </button>
-              <button
                 onClick={handleFinalizeAndSave}
                 disabled={saving}
                 className="w-full py-2 px-3 bg-[#5235e8] text-white rounded-md text-xs font-semibold hover:bg-[#4323c2] transition-colors flex justify-center items-center gap-2"
@@ -407,15 +435,6 @@ export default function ContentPreview() {
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 FINALIZE AND SAVE
               </button>
-              {job?.generate_ai_images && (
-                <button
-                  onClick={() => navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}`)}
-                  className="w-full py-2 px-3 bg-[#00A389]/10 text-[#00A389] border border-[#00A389]/30 rounded-md text-xs font-semibold hover:bg-[#00A389]/20 transition-colors flex justify-center items-center gap-2 mt-2"
-                >
-                  <ImageIcon size={14} />
-                  RETURN TO IMAGE REVIEW
-                </button>
-              )}
               <button
                 onClick={handleRemoveBundle}
                 disabled={saving}
@@ -429,12 +448,27 @@ export default function ContentPreview() {
         )}
       </div>
 
+      {/* Sidebar Toggle Button — anchored at the sidebar/content boundary */}
+      <div className="hidden md:flex items-center justify-center relative z-30 flex-shrink-0">
+        <button
+          onClick={toggleSidebar}
+          title={sidebarOpen ? 'Hide Task List' : 'Show Task List'}
+          className={clsx(
+            "absolute left-0 -translate-x-1/2 rounded-full w-12 h-12 flex items-center justify-center transition-all duration-200",
+            "bg-green-500 text-white border-2 border-white",
+            "shadow-[0_0_15px_rgba(34,197,94,0.5)] hover:shadow-[0_0_20px_rgba(34,197,94,0.7)] hover:bg-green-400 hover:scale-105 active:scale-95"
+          )}
+        >
+          {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
+      </div>
+
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-[600px] md:min-h-0 md:h-full relative overflow-hidden">
         
         {/* Top Navigation Tabs */}
-      <div className="bg-white px-6 border-b border-slate-200 shrink-0 flex items-center justify-between">
-        <div className="flex">
+      <div className="bg-white px-6 border-b border-slate-200 shrink-0 flex flex-wrap items-center justify-between gap-y-2 gap-x-4">
+        <div className="flex flex-wrap -mb-px">
           <button 
             onClick={() => setActiveTab('json')}
             className={clsx(
@@ -474,14 +508,48 @@ export default function ContentPreview() {
           </button>
         </div>
         
-        {activeTab === 'ai' && (
-          <button 
-            onClick={() => setIsFullscreen(true)}
-            className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors"
+        <div className="flex flex-wrap items-center gap-3 ml-auto py-2">
+          <button
+            onClick={handleSaveChanges}
+            disabled={saving}
+            className="py-1.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-50 transition-colors flex justify-center items-center gap-2 shadow-sm"
           >
-            <Maximize size={16} /> Fullscreen
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            SAVE CHANGES
           </button>
-        )}
+
+          {job?.generate_ai_images && (
+            <>
+              {['image_generation', 'image_generation_stopped', 'image_generation_complete', 'image_generation_failed'].includes(job?.status) ? (
+                <button
+                  onClick={() => navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}`)}
+                  className="py-1.5 px-4 bg-[#00A389]/10 text-[#00A389] border border-[#00A389]/30 rounded-md text-xs font-semibold hover:bg-[#00A389]/20 transition-colors flex justify-center items-center gap-2 shadow-sm"
+                >
+                  <ImageIcon size={14} />
+                  IMAGE REVIEW
+                </button>
+              ) : (
+                <button
+                  onClick={handleGenerateAiImages}
+                  disabled={saving}
+                  className="py-1.5 px-4 bg-[#00A389]/10 text-[#00A389] border border-[#00A389]/30 rounded-md text-xs font-semibold hover:bg-[#00A389]/20 transition-colors flex justify-center items-center gap-2 shadow-sm"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                  GENERATE AI IMAGES
+                </button>
+              )}
+            </>
+          )}
+
+          {activeTab === 'ai' && (
+            <button 
+              onClick={() => setIsFullscreen(true)}
+              className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold hover:text-slate-800 transition-colors ml-2"
+            >
+              <Maximize size={16} /> Fullscreen
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -652,7 +720,7 @@ export default function ContentPreview() {
                 <ActiveFitnessPreview 
                   productData={liveData} 
                   onViewInImageReview={(group) => {
-                    navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}&targetAsset=${group}`);
+                    navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}&selectGroup=${group}`);
                   }}
                 />
               );
@@ -662,7 +730,7 @@ export default function ContentPreview() {
       </div>
 
       {/* Fullscreen Overlay */}
-      {isFullscreen && activeTab === 'ai' && (
+      {isFullscreen && activeTab === 'ai' && createPortal(
         <div className="fixed inset-0 z-[9999] bg-white flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50 shadow-sm shrink-0">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -687,13 +755,14 @@ export default function ContentPreview() {
                   productData={liveData} 
                   onViewInImageReview={(group) => {
                     setIsFullscreen(false);
-                    navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}&targetAsset=${group}`);
+                    navigate(`/task-logs/ai-images/${jobId}?taskName=${encodeURIComponent(taskName)}&selectGroup=${group}`);
                   }}
                 />
               );
             })()}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
     </div>
