@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Image as ImageIcon, CheckCircle, RefreshCcw, Rocket, Layers, UploadCloud, Loader2, StopCircle, PlayCircle, Folder, FolderOpen, Maximize2, Minimize2, Trash2, ChevronLeft, ChevronRight, X, XCircle, AlertTriangle, Search, FileText } from 'lucide-react';
 import clsx from 'clsx';
 import api from '../api/client';
@@ -18,8 +19,20 @@ export default function AIImages() {
   const [promptText, setPromptText] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const [hasInitialSelection, setHasInitialSelection] = useState(false);
-  
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem('aiImages_sidebarOpen') !== 'false'; } catch { return true; }
+  });
+
+  const toggleSidebar = () => {
+    setSidebarOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem('aiImages_sidebarOpen', String(next)); } catch {}
+      return next;
+    });
+  };
+
   const [showStopModal, setShowStopModal] = useState(false);
   const [showKeepImagesModal, setShowKeepImagesModal] = useState(false);
   const [stopJobId, setStopJobId] = useState(null);
@@ -288,6 +301,12 @@ export default function AIImages() {
   }
 
   if (queue.length === 0) {
+    // If a specific task was requested via URL, keep the shimmer effect while we wait
+    // for it to transition into the image_generation phase.
+    if (targetTaskId) {
+      return <ImageQueueSkeleton />;
+    }
+
     return (
       <div className="h-[calc(100vh-6rem)] flex flex-col items-center justify-center text-slate-500">
         <ImageIcon size={48} className="text-slate-300 mb-4" />
@@ -298,10 +317,15 @@ export default function AIImages() {
   }
 
   return (
-    <div className="h-[calc(100vh-6rem)] md:h-[calc(100vh-6rem)] flex flex-col md:flex-row gap-4 md:gap-6 overflow-y-auto md:overflow-hidden pb-4 md:pb-0">
+    <div className="h-[calc(100vh-6rem)] md:h-[calc(100vh-6rem)] flex flex-col md:flex-row gap-4 md:gap-6 overflow-y-auto md:overflow-hidden pb-4 md:pb-0 relative z-0">
       
       {/* LEFT PANEL: Project Assets */}
-      <div className="w-full md:w-1/4 md:min-w-[300px] flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 md:h-full">
+      <div 
+        className={clsx(
+          "flex flex-col bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 md:h-full transition-all duration-200 ease-in-out relative z-10",
+          sidebarOpen ? "w-full md:w-1/4 md:min-w-[300px]" : "w-0 md:w-0 overflow-hidden border-0 shadow-none min-w-0 !p-0 !m-0 opacity-0 md:opacity-100 hidden md:flex"
+        )}
+      >
         <div className="p-4 border-b border-slate-100 bg-slate-50">
           <div className="text-xs font-bold text-slate-400 tracking-wider mb-2">PROJECT ASSETS</div>
           <h2 className="text-lg font-bold text-slate-800 mb-3">{taskName}</h2>
@@ -402,8 +426,23 @@ export default function AIImages() {
         </div>
       </div>
 
+      {/* Sidebar Toggle Button */}
+      <div className="hidden md:flex items-center justify-center relative z-30 flex-shrink-0 -mx-9">
+        <button
+          onClick={toggleSidebar}
+          title={sidebarOpen ? 'Hide Project Assets' : 'Show Project Assets'}
+          className={clsx(
+            "relative rounded-full w-12 h-12 flex items-center justify-center transition-all duration-200",
+            "bg-green-500 text-white border-2 border-white",
+            "shadow-[0_0_15px_rgba(34,197,94,0.5)] hover:shadow-[0_0_20px_rgba(34,197,94,0.7)] hover:bg-green-400 hover:scale-105 active:scale-95"
+          )}
+        >
+          {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
+      </div>
+
       {!activeJobId ? (
-        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-400">
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-slate-400 relative z-10">
           <Folder size={64} className="mb-6 text-slate-200" />
           <h2 className="text-xl font-bold text-slate-500 mb-2">No Task Selected</h2>
           <p className="text-sm text-slate-400">Click on a task in the left panel to review its generated assets.</p>
@@ -413,7 +452,7 @@ export default function AIImages() {
       ) : (
         <>
           {/* MIDDLE PANEL: Active Image & Bottom Status */}
-          <div className="flex-1 flex flex-col gap-4 md:gap-6 min-h-[500px] md:min-h-0 md:overflow-hidden">
+          <div className="flex-1 flex flex-col gap-4 md:gap-6 min-h-[500px] md:min-h-0 md:overflow-hidden relative z-10">
             
             {/* Credit Exhaustion / Error Banner */}
 
@@ -515,12 +554,21 @@ export default function AIImages() {
           {/* Prompt Editor */}
           <div className="border-t border-slate-200 bg-white p-5 flex flex-col shrink-0 @container">
             <div className="text-xs font-bold text-slate-400 tracking-wider mb-3">PROMPT EDITOR</div>
-            <textarea 
-              rows="5"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              className="w-full bg-slate-900 text-slate-100 rounded-lg p-4 font-mono text-sm border border-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none mb-5 resize-none shadow-inner"
-            />
+            <div className="relative w-full mb-5">
+              <textarea 
+                rows="5"
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                className="w-full bg-slate-900 text-slate-100 rounded-lg p-4 pb-10 font-mono text-sm border border-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none shadow-inner block"
+              />
+              <button 
+                onClick={() => setShowPromptModal(true)}
+                className="absolute bottom-2 right-2 p-1.5 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded transition-colors"
+                title="Expand Prompt Editor"
+              >
+                <Maximize2 size={16} />
+              </button>
+            </div>
             
             <div className="flex items-stretch gap-2 @2xl:gap-3 justify-end">
               <button 
@@ -701,9 +749,8 @@ export default function AIImages() {
             </button>
             <button 
               onClick={() => navigate(`/task-logs/content-preview/${activeJobId}?taskName=${encodeURIComponent(taskName)}&tab=ai`)}
-              className="w-full bg-slate-800 text-white flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-sm hover:bg-slate-900 transition-colors shadow-sm"
+              className="w-full bg-emerald-100 text-emerald-800 flex items-center justify-center py-3 rounded-lg font-semibold text-sm hover:bg-emerald-200 transition-colors shadow-sm"
             >
-              <CheckCircle size={16} />
               BACK TO CONTENT PREVIEW
             </button>
           </div>
@@ -712,8 +759,8 @@ export default function AIImages() {
       )}
       
       {/* Fullscreen Overlay */}
-      {isFullscreen && activeVariation && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center backdrop-blur-sm">
+      {isFullscreen && activeVariation && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center backdrop-blur-sm">
           <div className="absolute top-4 right-4 flex items-center gap-4">
             <button 
               onClick={() => setIsFullscreen(false)}
@@ -749,11 +796,12 @@ export default function AIImages() {
           <div className="absolute bottom-8 px-6 py-3 bg-black/60 rounded-full text-white font-medium tracking-wide">
             {currentAsset?.variation_group.toUpperCase()} — {activeVariation.asset_name}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Stop Modal */}
-      {showStopModal && (
+      {showStopModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex flex-col items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-slate-100">
@@ -792,10 +840,11 @@ export default function AIImages() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Keep Images Confirmation Modal */}
-      {showKeepImagesModal && (
+      {showKeepImagesModal && createPortal(
         <div className="fixed inset-0 z-[60] bg-slate-900/50 flex flex-col items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
@@ -832,7 +881,7 @@ export default function AIImages() {
         </div>
       )}
       {/* Delete Variation Modal */}
-      {showDeleteModal && (
+      {showDeleteModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex flex-col items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
@@ -864,7 +913,7 @@ export default function AIImages() {
       )}
 
       {/* Delete Job Modal */}
-      {showDeleteJobModal && (
+      {showDeleteJobModal && createPortal(
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex flex-col items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
@@ -892,7 +941,8 @@ export default function AIImages() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Insufficient Credits Modal */}
@@ -913,6 +963,35 @@ export default function AIImages() {
           }
         }}
       />
+      {/* Expanded Prompt Editor Modal */}
+      {showPromptModal && createPortal(
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[80vh] overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
+              <div className="font-bold text-slate-800 flex items-center gap-2">
+                <FileText size={18} className="text-blue-500" />
+                Prompt Editor
+              </div>
+              <button 
+                onClick={() => setShowPromptModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 p-6 bg-slate-100 flex flex-col">
+              <textarea 
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="Enter prompt text here..."
+                className="flex-1 w-full bg-slate-900 text-slate-100 rounded-xl p-6 font-mono text-base md:text-lg border-2 border-slate-800 focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 focus:outline-none resize-none shadow-inner leading-relaxed"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

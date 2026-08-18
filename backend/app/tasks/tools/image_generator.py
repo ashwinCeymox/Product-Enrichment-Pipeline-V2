@@ -108,28 +108,38 @@ async def _generate_single_image(
     }
 
     # ── Call the API ─────────────────────────────────────────
-    try:
-        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-        conn = aiohttp.TCPConnector(ssl=ssl_ctx)
-        async with aiohttp.ClientSession(connector=conn) as session:
-            async with session.post(
-                OPENROUTER_URL,
-                headers=headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=120),
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    if resp.status == 429:
-                        raise ImageGenerationError("Rate limit exceeded (429). Please try again later.")
-                    raise ImageGenerationError(f"API error {resp.status}: {body[:200]}")
+    max_retries = 3
+    api_response = None
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+            # Use force_close to prevent reusing dead connections that cause [Errno 32] Broken pipe
+            conn = aiohttp.TCPConnector(ssl=ssl_ctx, force_close=True)
+            async with aiohttp.ClientSession(connector=conn) as session:
+                async with session.post(
+                    OPENROUTER_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                ) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        if resp.status == 429:
+                            raise ImageGenerationError("Rate limit exceeded (429). Please try again later.")
+                        raise ImageGenerationError(f"API error {resp.status}: {body[:200]}")
 
-                api_response = await resp.json()
-
-    except aiohttp.ClientError as e:
-        raise ImageGenerationError(f"Network error connecting to image API: {e}")
-    except asyncio.TimeoutError:
-        raise ImageGenerationError("Image API request timed out (120s)")
+                    api_response = await resp.json()
+                    break # Success!
+        except aiohttp.ClientError as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            raise ImageGenerationError(f"Network error connecting to image API: {e}")
+        except asyncio.TimeoutError:
+            raise ImageGenerationError("Image API request timed out (120s)")
     
     # ── Check for API-level errors ───────────────────────────
     if "error" in api_response:

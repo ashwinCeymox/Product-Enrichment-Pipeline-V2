@@ -81,6 +81,7 @@ class JobResponse(BaseModel):
     scheduled_date: Optional[date] = None
     source_data: Optional[Dict[str, Any]] = None
     product_data: Optional[Dict[str, Any]] = None
+    generate_ai_images: bool = False
     raw_html: Optional[str] = None
     result_zip_file: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
