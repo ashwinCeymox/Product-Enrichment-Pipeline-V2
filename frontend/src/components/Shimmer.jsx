@@ -275,3 +275,39 @@ export function QueueSidebarSkeleton({ items = 5 }) {
     </div>
   );
 }
+
+/* ─── Task Logs Skeleton ─────────────────────────────────────────── */
+export function TaskLogsSkeleton({ items = 4 }) {
+  return (
+    <div className="space-y-4 animate-in fade-in duration-300">
+      {[...Array(items)].map((_, i) => (
+        <div key={i} className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-3">
+              <ShimmerBar className="h-5 w-40" />
+              <ShimmerBar className="h-5 w-16 rounded-full" />
+            </div>
+            <div className="flex items-center gap-4">
+              <ShimmerBar className="h-5 w-24 rounded-full" />
+              <ShimmerBar className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+            {[...Array(2)].map((_, j) => (
+              <div key={j} className="flex items-center justify-between p-4 border border-slate-100 rounded-lg shadow-sm">
+                <div className="flex flex-col gap-2 flex-1">
+                  <ShimmerBar className="h-4 w-64" />
+                  <ShimmerBar className="h-3 w-full max-w-2xl" />
+                </div>
+                <div className="flex items-center gap-4 ml-6 shrink-0">
+                  <ShimmerBar className="h-9 w-28 rounded-md" />
+                  <ShimmerBar className="h-9 w-10 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

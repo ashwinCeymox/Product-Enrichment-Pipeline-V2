@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
-import { Search, Loader2, Image as ImageIcon, FileText, RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, RefreshCcw, Trash2, Calendar } from 'lucide-react';
+import { Search, Loader2, Image as ImageIcon, FileText, RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, RefreshCcw, Trash2, Calendar, Filter, X } from 'lucide-react';
+import { TaskLogsSkeleton } from '../components/Shimmer';
 import clsx from 'clsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function TaskLogs() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [filterDate, setFilterDate] = useState('');
+  const [filterStatuses, setFilterStatuses] = useState([]);
   const [expandedTasks, setExpandedTasks] = useState(new Set());
   const [jobToAbort, setJobToAbort] = useState(null);
   const [isAborting, setIsAborting] = useState(false);
@@ -21,6 +25,8 @@ export default function TaskLogs() {
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
 
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetTaskId = searchParams.get('taskId');
 
   const fetchTasks = async () => {
     try {
@@ -64,8 +70,16 @@ export default function TaskLogs() {
       
       setTasks(taskList);
       
-      // Auto-expand the first task if nothing is expanded yet
+      // Auto-expand the target task if specified, else the first task
       setExpandedTasks(prev => {
+        const newSet = new Set(prev);
+        if (targetTaskId) {
+          const targetGroup = taskList.find(t => t.jobs.some(j => j.id === targetTaskId || j.job_id === targetTaskId));
+          if (targetGroup) {
+            newSet.add(targetGroup.task_name);
+            return newSet;
+          }
+        }
         if (taskList.length > 0 && prev.size === 0) {
           return new Set([taskList[0].task_name]);
         }
@@ -83,6 +97,17 @@ export default function TaskLogs() {
     const interval = setInterval(fetchTasks, 10000);
     return () => clearInterval(interval);
   }, []);
+  useEffect(() => {
+    if (targetTaskId && tasks.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`job-${targetTaskId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [targetTaskId, tasks]);
+
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -167,7 +192,7 @@ export default function TaskLogs() {
       case 'pending':
       case 'queued': return 'Queued';
       case 'processing':
-      case 'scraping': return 'Scraping';
+      case 'scraping': return 'Processing';
       case 'ai_processing': return 'Ai Processing';
       case 'image_generation': return 'Image Generation';
       case 'waiting_for_approval': return 'Pending Review';
@@ -186,7 +211,36 @@ export default function TaskLogs() {
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const filteredTasks = tasks.filter(t => t.task_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const activeFiltersCount = (filterDate ? 1 : 0) + filterStatuses.length;
+
+  const getFilteredJobs = (jobs) => {
+    return jobs.filter(job => {
+      // Status filter
+      if (filterStatuses.length > 0) {
+        let simplifiedStatus = 'completed';
+        if (['failed', 'aborted', 'error', 'rescheduled'].includes(job.status)) simplifiedStatus = 'error';
+        else if (['pending', 'queued', 'processing', 'scraping', 'ai_processing', 'image_generation'].includes(job.status)) simplifiedStatus = 'processing';
+        
+        if (!filterStatuses.includes(simplifiedStatus)) return false;
+      }
+
+      // Date filter
+      if (filterDate) {
+        const jobDate = formatDate(job.created_at);
+        const [y, m, d] = filterDate.split('-');
+        const formattedFilterDate = `${d}/${m}/${y}`;
+        if (jobDate !== formattedFilterDate) return false;
+      }
+      return true;
+    });
+  };
+
+  const filteredTasks = tasks.map(t => ({
+    ...t,
+    jobs: getFilteredJobs(t.jobs)
+  }))
+  .filter(t => t.jobs.length > 0)
+  .filter(t => t.task_name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -196,7 +250,115 @@ export default function TaskLogs() {
           <p className="text-sm text-slate-500 mt-1">Pipeline execution records for product enrichment.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          
+          {/* Active Filter Chips */}
+          {(filterDate || filterStatuses.length > 0) && (
+            <div className="flex items-center gap-2 mr-2">
+              {filterDate && (
+                <span className="flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-semibold">
+                  Date: {filterDate}
+                  <button onClick={() => setFilterDate('')} className="hover:bg-slate-200 rounded-full p-0.5 transition-colors"><X size={12}/></button>
+                </span>
+              )}
+              {filterStatuses.map(status => (
+                <span key={status} className="flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-semibold capitalize">
+                  {status}
+                  <button onClick={() => setFilterStatuses(prev => prev.filter(s => s !== status))} className="hover:bg-slate-200 rounded-full p-0.5 transition-colors"><X size={12}/></button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Filter Popover Container */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowFilterPopover(prev => !prev)}
+              className={clsx(
+                "flex items-center gap-2 bg-white border px-4 py-2 rounded-md text-sm font-medium transition-colors h-10",
+                showFilterPopover || activeFiltersCount > 0 ? "border-primary text-primary bg-primary/5" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+              )}
+            >
+              <Filter size={16} />
+              Filter
+              {activeFiltersCount > 0 && (
+                <span className="bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 leading-none">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+            
+            {showFilterPopover && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFilterPopover(false)} />
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-4 space-y-4">
+                    {/* Date Picker */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Date</label>
+                      <input 
+                        type="date"
+                        value={filterDate}
+                        onChange={(e) => setFilterDate(e.target.value)}
+                        className="w-full border border-slate-300 rounded-md text-sm p-2 focus:ring-primary focus:border-primary outline-none"
+                      />
+                    </div>
+                    
+                    {/* Status Checkboxes */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2">Status</label>
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <input 
+                            type="checkbox"
+                            checked={filterStatuses.includes('completed')}
+                            onChange={(e) => {
+                              if (e.target.checked) setFilterStatuses(prev => [...prev, 'completed']);
+                              else setFilterStatuses(prev => prev.filter(s => s !== 'completed'));
+                            }}
+                            className="rounded text-primary focus:ring-primary border-slate-300 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="text-sm text-slate-700 group-hover:text-slate-900 transition-colors">Completed</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <input 
+                            type="checkbox"
+                            checked={filterStatuses.includes('processing')}
+                            onChange={(e) => {
+                              if (e.target.checked) setFilterStatuses(prev => [...prev, 'processing']);
+                              else setFilterStatuses(prev => prev.filter(s => s !== 'processing'));
+                            }}
+                            className="rounded text-primary focus:ring-primary border-slate-300 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="text-sm text-slate-700 group-hover:text-slate-900 transition-colors">Processing</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Footer */}
+                  <div className="bg-slate-50 border-t border-slate-100 p-3 flex items-center justify-between">
+                    <button 
+                      onClick={() => {
+                        setFilterDate('');
+                        setFilterStatuses([]);
+                      }}
+                      className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                    >
+                      Clear all
+                    </button>
+                    <button 
+                      onClick={() => setShowFilterPopover(false)}
+                      className="bg-slate-800 text-white px-4 py-1.5 rounded-md text-xs font-bold hover:bg-slate-700 transition-colors shadow-sm"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
@@ -204,24 +366,32 @@ export default function TaskLogs() {
               placeholder="Search tasks..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:ring-primary focus:border-primary w-64 bg-white"
+              className="pl-9 pr-4 py-2 border border-slate-300 rounded-md text-sm focus:ring-primary focus:border-primary w-64 bg-white outline-none h-10"
             />
           </div>
-          <button onClick={fetchTasks} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors">
+          <button onClick={fetchTasks} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors h-10">
             Refresh Logs
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center p-12">
-          <Loader2 size={32} className="animate-spin text-primary" />
-        </div>
+        <TaskLogsSkeleton items={4} />
       ) : filteredTasks.length === 0 ? (
-        <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
-          <AlertCircle size={48} className="mx-auto text-slate-300 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-800">No tasks found</h3>
-          <p className="text-slate-500">Try adjusting your search.</p>
+        <div className="bg-white rounded-lg border border-slate-200 p-12 text-center flex flex-col items-center">
+          <AlertCircle size={48} className="text-slate-300 mb-4" />
+          <h3 className="text-lg font-semibold text-slate-800">No tasks match your filters</h3>
+          <p className="text-slate-500 mb-6">Try adjusting your search or filters.</p>
+          <button 
+            onClick={() => {
+              setSearchQuery('');
+              setFilterDate('');
+              setFilterStatuses([]);
+            }}
+            className="bg-primary text-white px-6 py-2 rounded-md text-sm font-bold hover:bg-primary/90 transition-colors"
+          >
+            Clear all filters and search
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -242,18 +412,12 @@ export default function TaskLogs() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className={clsx("flex items-center gap-1.5 text-sm font-medium bg-white px-2 py-1", 
-                      task.status === 'completed' ? "text-emerald-600" :
-                      task.status === 'error' ? "text-rose-600" : "text-indigo-600"
+                      task.status === 'completed' ? "text-emerald-600" : "text-indigo-600"
                     )}>
                       <div className={clsx("w-2 h-2 rounded-full",
-                        task.status === 'completed' ? "bg-emerald-600" :
-                        task.status === 'error' ? "bg-rose-600" : "bg-indigo-600 animate-pulse"
+                        task.status === 'completed' ? "bg-emerald-600" : "bg-indigo-600 animate-pulse"
                       )}></div>
-                      {(() => {
-                        const hasRefError = task.jobs.some(j => j.error_message && j.error_message.includes('No reference image found'));
-                        if (hasRefError) return 'No reference image found';
-                        return getStatusLabel(task.status);
-                      })()}
+                      {task.status === 'completed' ? 'Completed' : 'Processing'}
                     </div>
                     <svg
                       className={clsx("w-5 h-5 text-slate-400 transition-transform", isExpanded && "rotate-180")}
@@ -277,12 +441,21 @@ export default function TaskLogs() {
                       return (
                         <div 
                           key={job.job_id} 
-                          className="flex flex-col p-4 rounded-xl border border-slate-200 bg-white shadow-sm transition-all"
+                          id={`job-${job.job_id}`}
+                          className={clsx(
+                            "flex flex-col p-4 rounded-xl border transition-all duration-500",
+                            targetTaskId === job.job_id 
+                              ? "border-blue-400 bg-blue-50/50 shadow-md ring-4 ring-blue-50" 
+                              : "border-slate-200 bg-white shadow-sm"
+                          )}
                         >
                           <div className="flex justify-between items-start mb-2">
                             <h4 className="font-bold text-slate-800 text-lg truncate pr-4">
-                              {job.product_data?.product_identity?.product_name || job.product_data?.product_identity?.brand || job.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]} 
-                              {/* Simple domain extraction as a fallback task name if job has no explicit name */}
+                              {(() => {
+                                const domainName = job.source_url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+                                if (!isComplete) return domainName;
+                                return job.product_name || domainName;
+                              })()}
                             </h4>
                             <div className="flex items-center gap-3 shrink-0">
                               <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-500 text-xs font-semibold rounded-md border border-slate-100">

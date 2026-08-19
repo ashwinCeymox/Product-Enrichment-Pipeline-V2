@@ -82,6 +82,16 @@ def get_recent_activity(limit: int = 20, db: Session = Depends(get_db)):
     items = []
     for t in tasks:
         stage, current_status = get_task_stage_and_status(t.status)
+
+        # Extract the product name from whichever data field has it
+        product_name = None
+        for data in [t.source_data, t.product_data]:
+            if isinstance(data, dict):
+                identity = data.get("product_identity", {})
+                product_name = identity.get("product_name") or identity.get("brand")
+                if product_name:
+                    break
+
         items.append(RecentActivityItem(
             job_id=t.id,
             task_id=t.id,
@@ -94,6 +104,7 @@ def get_recent_activity(limit: int = 20, db: Session = Depends(get_db)):
             created_at=t.created_at,
             error_message=t.error_message,
             generate_ai_images=t.generate_ai_images,
+            product_name=product_name,
         ))
     return RecentActivityResponse(items=items)
 

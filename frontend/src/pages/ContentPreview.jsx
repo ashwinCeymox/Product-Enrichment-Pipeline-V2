@@ -503,8 +503,7 @@ export default function ContentPreview() {
               activeTab === 'ai' ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-700"
             )}
           >
-            <Sparkles size={16} className="text-amber-500" />
-            ✨ AI GENERATED PAGE
+            AI GENERATED PAGE
           </button>
         </div>
         
