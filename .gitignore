@@ -35,9 +35,3 @@ backend/celerybeat-schedule.db
 # ── OS ──
 .DS_Store
 Thumbs.db
-
-*.db
-backend/scrape_data.db
-backend/smoke_test.py
-.vscode/
-tools_dump.json
