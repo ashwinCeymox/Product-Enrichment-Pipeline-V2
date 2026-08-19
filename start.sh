@@ -21,6 +21,7 @@ API_PORT=$(get_free_port 8000)
 DB_PORT=$(get_free_port 5433)
 REDIS_PORT=$(get_free_port 6379)
 PGWEB_PORT=$(get_free_port 8081)
+STEEL_PORT=$(get_free_port 3000)
 
 echo "[✔] Ports verified:"
 echo "    - Frontend Web : $WEB_PORT"
@@ -28,6 +29,7 @@ echo "    - Backend API  : $API_PORT"
 echo "    - PostgreSQL   : $DB_PORT"
 echo "    - Redis        : $REDIS_PORT"
 echo "    - PGWeb        : $PGWEB_PORT"
+echo "    - Steel API    : $STEEL_PORT"
 echo ""
 
 # ── 2. Configure the .env file ──
@@ -46,6 +48,7 @@ HOST_API_PORT=$API_PORT
 HOST_DB_PORT=$DB_PORT
 HOST_REDIS_PORT=$REDIS_PORT
 HOST_PGWEB_PORT=$PGWEB_PORT
+HOST_STEEL_PORT=$STEEL_PORT
 
 # ── Internal Docker Networking ──
 DATABASE_URL=postgresql+psycopg2://pgweb:pgweb@postgres:5432/pgweb
