@@ -92,7 +92,7 @@ services:
     image: ghcr.io/steel-dev/steel-browser-api:latest
     ports:
       - "${HOST_STEEL_PORT:-3000}:3000"
-      - "9223:9223"
+      - "${HOST_STEEL_DEBUG_PORT:-9223}:9223"
     restart: unless-stopped
 
   steel-ui:

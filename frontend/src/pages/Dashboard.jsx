@@ -15,26 +15,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const handleRowClick = (item) => {
-    if (!item.task_id) return;
-    
-    switch (item.current_stage) {
-      case 'JSON_REVIEW':
-        navigate(`/approvals/json?taskId=${item.task_id}`);
-        break;
-      case 'IMAGE_REVIEW':
-        navigate(`/approvals/images?taskId=${item.task_id}`);
-        break;
-      case 'HTML_REVIEW':
-      case 'BUNDLE_REVIEW':
-      case 'COMPLETED':
-        navigate(`/bundles?taskId=${item.task_id}`);
-        break;
-      case 'FAILED':
-        navigate(`/error-logs?taskId=${item.task_id}`);
-        break;
-      default:
-        break;
-    }
+    if (!item.job_id) return;
+    navigate(`/task-logs?taskId=${item.job_id}`);
   };
 
   const fetchDashboardData = async () => {
@@ -234,7 +216,7 @@ export default function Dashboard() {
                 <div 
                   key={item.job_id || idx} 
                   onClick={() => handleRowClick(item)}
-                  className="p-4 md:p-5 hover:bg-slate-50/80 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 cursor-pointer overflow-hidden"
+                  className="p-4 md:p-5 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2 cursor-pointer overflow-hidden group hover:shadow-sm"
                 >
                   <div className="flex flex-col gap-1.5 w-full sm:max-w-[65%] pointer-events-none min-w-0">
                     <div className="flex items-center gap-3">
@@ -267,23 +249,13 @@ export default function Dashboard() {
               ))}
             </div>
             
-            {activity.length > 5 && !showAllTasks && (
+            {activity.length > 5 && (
               <div className="p-3 border-t border-slate-100 flex justify-center bg-slate-50">
                 <button 
-                  onClick={() => setShowAllTasks(true)}
+                  onClick={() => navigate('/task-logs')}
                   className="text-[13px] font-bold text-blue-600 hover:text-blue-800 transition-colors py-2 px-6 rounded-lg hover:bg-blue-50"
                 >
-                  View More ({activity.length - 5} additional tasks)
-                </button>
-              </div>
-            )}
-            {showAllTasks && (
-              <div className="p-3 border-t border-slate-100 flex justify-center bg-slate-50 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] relative z-10">
-                <button 
-                  onClick={() => setShowAllTasks(false)}
-                  className="text-[13px] font-bold text-slate-500 hover:text-slate-700 transition-colors py-2 px-6 rounded-lg hover:bg-slate-200"
-                >
-                  View Less
+                  Open Task Logs
                 </button>
               </div>
             )}

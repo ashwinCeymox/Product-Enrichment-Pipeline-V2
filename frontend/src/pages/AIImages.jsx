@@ -989,7 +989,8 @@ export default function AIImages() {
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
