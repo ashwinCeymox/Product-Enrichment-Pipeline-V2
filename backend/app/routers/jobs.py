@@ -655,10 +655,22 @@ def download_bundle(job_id: str, db: Session = Depends(get_db)):
         # Add images
         for img in ai_images:
             local_path = img.get("local_path")
-            url = img.get("url") # "images/filename.png"
+            url = img.get("url") # e.g. "images/filename.png" or just "filename.png"
             if local_path and os.path.exists(local_path):
+                current_filename = os.path.basename(url) if url else os.path.basename(local_path)
+                
+                # Fetch product name and sku
+                identity = prod_data.get("product_identity", {})
+                product_name = str(identity.get("product_name", "product")).replace(" ", "_").replace("/", "-")
+                sku = str(identity.get("sku") or identity.get("model", "sku"))
+                
+                # Desired format: product name600164{sku/model no}01.JPG{currentname}
+                new_filename = f"{product_name}600164{sku}01.JPG{current_filename}"
+                new_url = f"images/{new_filename}"
+                
                 # Put the image inside the bundle folder
-                zip_file.write(local_path, arcname=f"{bundle_folder}/{url}")
+                zip_file.write(local_path, arcname=f"{bundle_folder}/{new_url}")
+                img["url"] = new_url # Update JSON reference
             
             if "local_path" in img:
                 del img["local_path"]
@@ -714,15 +726,33 @@ def finalize_job(job_id: str, payload: ApprovalRequest, current_user: User = Dep
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for img in ai_images:
             local_path = img.get("local_path")
-            url = img.get("url") # "images/filename.png"
+            url = img.get("url") # e.g. "images/filename.png" or just "filename.png"
             if local_path and os.path.exists(local_path):
-                zip_file.write(local_path, arcname=url)
+                # Rename the image file
+                current_filename = os.path.basename(url) if url else os.path.basename(local_path)
+                
+                # Fetch product name and sku
+                identity = prod_data.get("product_identity", {})
+                product_name = str(identity.get("product_name", "product")).replace(" ", "_").replace("/", "-")
+                sku = str(identity.get("sku") or identity.get("model", "sku"))
+                
+                # Desired format: product name600164{sku/model no}01.JPG{currentname}
+                new_filename = f"{product_name}600164{sku}01.JPG{current_filename}"
+                new_url = f"images/{new_filename}"
+                
+                zip_file.write(local_path, arcname=new_url)
+                img["url"] = new_url # Update JSON reference to match the new image name
             
             if "local_path" in img:
                 del img["local_path"]
                 
         json_str = json.dumps(prod_data, indent=2)
         zip_file.writestr(f"{safe_name}.json", json_str)
+        
+    # Update the DB with the modified product_data (which now contains the new image URLs)
+    job.product_data = prod_data
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(job, "product_data")
         
     zip_bytes = zip_buffer.getvalue()
     size_mb = round(len(zip_bytes) / (1024*1024), 2)
