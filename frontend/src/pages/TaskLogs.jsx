@@ -218,8 +218,9 @@ export default function TaskLogs() {
       // Status filter
       if (filterStatuses.length > 0) {
         let simplifiedStatus = 'completed';
-        if (['failed', 'aborted', 'error', 'rescheduled'].includes(job.status)) simplifiedStatus = 'error';
-        else if (['pending', 'queued', 'processing', 'scraping', 'ai_processing', 'image_generation'].includes(job.status)) simplifiedStatus = 'processing';
+        if (['failed', 'aborted', 'error', 'rescheduled', 'pending', 'queued', 'processing', 'scraping', 'ai_processing', 'image_generation'].includes(job.status)) {
+          simplifiedStatus = 'processing';
+        }
         
         if (!filterStatuses.includes(simplifiedStatus)) return false;
       }
